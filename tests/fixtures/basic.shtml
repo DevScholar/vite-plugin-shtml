@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<html>
+<head><title>Basic Test</title></head>
+<body>
+<h1>Hello World</h1>
+<p>Today is <!--#echo var="DATE_LOCAL" --></p>
+</body>
+</html>

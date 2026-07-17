@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head><title>Condition Test</title></head>
+<body>
+<!--#set var="mood" value="happy" -->
+<!--#if expr="$mood = happy" -->
+  <p>I am happy!</p>
+<!--#else -->
+  <p>I am sad.</p>
+<!--#endif -->
+
+<!--#if expr="$count > 10" -->
+  <p>Count is high.</p>
+<!--#elif expr="$count > 0" -->
+  <p>Count is positive.</p>
+<!--#else -->
+  <p>Count is zero or negative.</p>
+<!--#endif -->
+</body>
+</html>

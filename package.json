@@ -1,0 +1,54 @@
+{
+  "name": "@devscholar/vite-plugin-shtml",
+  "version": "0.1.0",
+  "description": "A static site generator based on the Apache SHTML standard for simple scenarios.",
+  "type": "module",
+  "license": "MIT",
+  "author": "DevScholar",
+  "homepage": "https://github.com/devscholar/vite-plugin-shtml#readme",
+  "bugs": {
+    "url": "https://github.com/devscholar/vite-plugin-shtml/issues"
+  },
+  "keywords": [
+    "vite-plugin",
+    "shtml",
+    "ssi",
+    "server-side-includes",
+    "mod_include",
+    "apache",
+    "retro",
+    "90s"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devscholar/vite-plugin-shtml"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "vite": "^5.0.0 || ^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.3.0",
+    "vitest": "^4.1.10"
+  }
+}

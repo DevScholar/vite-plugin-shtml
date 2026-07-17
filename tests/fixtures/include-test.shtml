@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html>
+<head><title>Include Test</title></head>
+<body>
+<!--#include file="header.inc" -->
+<p>Body content here.</p>
+<!--#include file="footer.inc" -->
+</body>
+</html>
