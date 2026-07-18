@@ -2,10 +2,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { execSync } from "node:child_process";
 
-import type { SsiConfig } from "./types";
-import { tokenize, type SsiToken } from "./tokenizer";
-import { ExprEvaluator } from "./evaluator";
-import { strftime, formatSize, isPathSafe } from "./strftime";
+import type { SsiConfig } from "./types.js";
+import { tokenize, type SsiToken } from "./tokenizer.js";
+import { ExprEvaluator } from "./evaluator.js";
+import { strftime, formatSize, isPathSafe } from "./strftime.js";
 
 const MAX_DEPTH = 10;
 
