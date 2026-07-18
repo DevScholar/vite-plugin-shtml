@@ -9,9 +9,6 @@ import { strftime, formatSize, isPathSafe } from "./strftime.js";
 
 const MAX_DEPTH = 10;
 
-/** Custom <!-\- TITLE: ... --> marker */
-const RE_TITLE = /<!--\s*TITLE:\s*(.+?)\s*-->/;
-
 /**
  * Rewrite intra-site .shtml hrefs → .html (for build output).
  */
@@ -73,7 +70,6 @@ export class SsiProcessor {
   /** Build standard SSI variables for a file. */
   private buildEnv(
     filePath: string,
-    pageTitle: string,
     customVars: Record<string, string>,
     timefmt: string,
   ): Record<string, string> {
@@ -91,7 +87,6 @@ export class SsiProcessor {
           return "(unknown)";
         }
       })(),
-      TITLE: pageTitle || this.baseVariables["TITLE"] || "Untitled",
       SERVER_SOFTWARE: "vite-plugin-shtml/0.1.0",
       USER_NAME: "(none)",
     };
@@ -107,7 +102,6 @@ export class SsiProcessor {
     filePath: string,
     depth: number,
     track: boolean,
-    inheritedTitle = "",
     inheritedVars: Record<string, string> = {},
     inheritedConfig?: SsiConfig,
     visited?: Set<string>,
@@ -130,11 +124,6 @@ export class SsiProcessor {
 
     if (track) this.clearTracking(filePath);
 
-    // Extract page title
-    const titleMatch = content.match(RE_TITLE);
-    const ownTitle = titleMatch ? titleMatch[1].trim() : "";
-    const pageTitle = ownTitle || inheritedTitle;
-
     // Config state (inherited or defaults)
     let timefmt = inheritedConfig?.timefmt ?? "%Y-%m-%d %H:%M:%S";
     let sizefmt = inheritedConfig?.sizefmt ?? "abbrev";
@@ -151,7 +140,6 @@ export class SsiProcessor {
       filePath,
       depth,
       track,
-      pageTitle,
       () => timefmt,
       (v) => { timefmt = v; },
       () => sizefmt,
@@ -168,7 +156,6 @@ export class SsiProcessor {
     filePath: string,
     depth: number,
     track: boolean,
-    pageTitle: string,
     getTimefmt: () => string,
     setTimefmt: (v: string) => void,
     getSizefmt: () => string,
@@ -199,7 +186,7 @@ export class SsiProcessor {
       stack.length > 0 ? stack[stack.length - 1] : null;
 
     const evalExpr = (expr: string): boolean => {
-      const env = this.buildEnv(filePath, pageTitle, localVars, getTimefmt());
+      const env = this.buildEnv(filePath, localVars, getTimefmt());
       try {
         return new ExprEvaluator(env).eval(expr);
       } catch {
@@ -273,7 +260,7 @@ export class SsiProcessor {
         case "echo":
           if (shouldOutput()) {
             const env = this.buildEnv(
-              filePath, pageTitle, localVars, getTimefmt(),
+              filePath, localVars, getTimefmt(),
             );
             out += env[tok.var] ?? env[tok.var.toUpperCase()] ?? "";
           }
@@ -301,7 +288,7 @@ export class SsiProcessor {
           }
           const incContent = fs.readFileSync(incPath, "utf-8");
           out += this.process(
-            incContent, incPath, depth + 1, track, pageTitle,
+            incContent, incPath, depth + 1, track,
             { ...localVars },
             {
               timefmt: getTimefmt(),
@@ -370,7 +357,7 @@ export class SsiProcessor {
         case "printenv": {
           if (!shouldOutput()) { i++; break; }
           const env = this.buildEnv(
-            filePath, pageTitle, localVars, getTimefmt(),
+            filePath, localVars, getTimefmt(),
           );
           const entries = Object.entries(env).sort(([a], [b]) =>
             a.localeCompare(b),

@@ -147,14 +147,6 @@ Config state is inherited by included files.
 
 Dumps all SSI variables as `<pre>KEY=VALUE</pre>`.
 
-### Page Title
-
-```html
-<!-- TITLE: My Page -->
-```
-
-Custom directive (not part of Apache SSI) — sets the `TITLE` variable used by `<!--#echo var="TITLE" -->`.
-
 ---
 
 ## Expression Syntax
@@ -189,7 +181,7 @@ Custom directive (not part of Apache SSI) — sets the `TITLE` variable used by 
 | `DATE_GMT` | Current date/time (UTC, `timefmt`) |
 | `LAST_MODIFIED` | File modification time (`timefmt`) |
 | `SERVER_SOFTWARE` | `vite-plugin-shtml/0.1.0` |
-| `TITLE` | From `<!-- TITLE: ... -->` or option |
+| `TITLE` | From `<!--#set var="TITLE" ... -->` or option |
 | `USER_NAME` | `(none)` |
 
 ---

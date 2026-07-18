@@ -109,7 +109,6 @@ describe("SsiProcessor.process", () => {
       path.join(FIXTURES, "test.shtml"),
       0,
       false,
-      "",
       { X: "hello" },
     );
     expect(result).toBe("YES");
@@ -124,7 +123,6 @@ describe("SsiProcessor.process", () => {
       path.join(FIXTURES, "test.shtml"),
       0,
       false,
-      "",
       { X: "world" },
     );
     expect(result).toBe("NO");
@@ -139,7 +137,6 @@ describe("SsiProcessor.process", () => {
       path.join(FIXTURES, "test.shtml"),
       0,
       false,
-      "",
       { X: "b" },
     );
     expect(result).toBe("B");
@@ -154,7 +151,6 @@ describe("SsiProcessor.process", () => {
       path.join(FIXTURES, "test.shtml"),
       0,
       false,
-      "",
       { A: "no", B: "yes" },
     );
     expect(result).toBe("");
