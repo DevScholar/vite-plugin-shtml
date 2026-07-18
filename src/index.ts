@@ -302,6 +302,7 @@ export default function vitePluginShtml(
 
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ?? "/";
+        if (!url.endsWith(".shtml")) return next();
 
         // Redirect / → /index.shtml
         if (url === "/") {
@@ -310,10 +311,9 @@ export default function vitePluginShtml(
           return;
         }
 
-        if (!url.endsWith(".shtml")) return next();
 
         const cleanUrl = url.split("?")[0].split("#")[0];
-        const filePath = path.resolve(includeDirAbs, cleanUrl.slice(1));
+        const filePath = path.resolve(root, cleanUrl.slice(1));
 
         if (!isPathSafe(filePath, includeDirAbs) || !fs.existsSync(filePath)) {
           return next();
