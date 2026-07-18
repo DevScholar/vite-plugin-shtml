@@ -137,8 +137,13 @@ function rewriteHashedPaths(
 
     const resolved = path.resolve(shtmlDir, ref);
 
-    // Look up the hashed chunk filename for this module
-    const hashedFile = moduleMap.get(resolved);
+    // Look up the hashed chunk filename for this module.
+    // Fall back to the .shtml entry's own chunk if the module was
+    // tree-shaken (e.g. a script that only imports CSS).
+    let hashedFile = moduleMap.get(resolved);
+    if (!hashedFile) {
+      hashedFile = moduleMap.get(shtmlPath);
+    }
     if (hashedFile) {
       const relPath = path.relative(htmlOutDir, path.resolve(outDir, hashedFile));
       return `${prefix}${relPath.replace(/\\/g, "/")}${suffix}`;
@@ -190,7 +195,7 @@ export default function vitePluginShtml(
 
         const p = processor!;
 
-        // Dev: ctx.filename is the URL we passed (e.g. "/src/index.shtml")
+        // Dev: ctx.filename is the URL we passed (e.g. "/src/en-us/index.shtml")
         // Build: not used (handled by transform + generateBundle instead)
         const filePath = path.resolve(root, filename.replace(/^\//, ""));
 
@@ -199,7 +204,22 @@ export default function vitePluginShtml(
           return rawHtml;
         }
 
-        return p.process(rawHtml, filePath, 0, !!ctx.server);
+        let html = p.process(rawHtml, filePath, 0, !!ctx.server);
+
+        // In dev mode: rewrite relative src/href to absolute (from root)
+        // so they resolve correctly regardless of the browser URL.
+        // E.g. ../main.ts in src/en-us/index.shtml → /src/main.ts
+        if (ctx.server) {
+          const shtmlDir = path.dirname(filePath);
+          html = html.replace(RE_ALL_SRC, (_match, prefix: string, ref: string, suffix: string) => {
+            if (/^(https?:|\/\/|data:|#|\/)/.test(ref)) return _match;
+            const resolved = path.resolve(shtmlDir, ref);
+            const absolute = "/" + path.relative(root, resolved).replace(/\\/g, "/");
+            return `${prefix}${absolute}${suffix}`;
+          });
+        }
+
+        return html;
       },
     },
 
@@ -243,6 +263,24 @@ export default function vitePluginShtml(
       // Build a map from every source module → its output chunk filename
       const moduleMap = buildModuleOutputMap(bundle as any);
 
+      // Build a map: shtml absolute path → its CSS asset filenames.
+      // A shtml's CSS may be on a different chunk if Rollup deduplicated
+      // a shared module (like main.ts with only a CSS import).
+      const shtmlToCss = new Map<string, string[]>();
+      for (const [, info] of Object.entries(bundle)) {
+        if (info.type !== "chunk") continue;
+        const cssSet: Set<string> = (info as any).viteMetadata?.importedCss;
+        if (!cssSet || cssSet.size === 0) continue;
+        const candidates = new Set<string>();
+        if ((info as any).facadeModuleId) candidates.add((info as any).facadeModuleId);
+        for (const m of Object.keys((info as any).modules ?? {})) candidates.add(m);
+        for (const c of candidates) {
+          if (!c.endsWith(".shtml")) continue;
+          const key = path.resolve(c);
+          shtmlToCss.set(key, [...cssSet]);
+        }
+      }
+
       const shtmlFiles = globShtml(srcDir);
       console.log(`[vite-plugin-shtml] Processing ${shtmlFiles.length} .shtml file(s)...`);
 
@@ -260,8 +298,25 @@ export default function vitePluginShtml(
         // Rewrite intra-site .shtml links → .html
         content = content.replace(RE_HREF_SHTML, "$1$2html$3");
 
+        // Rewrite meta-refresh .shtml URLs → .html (for preview/prod redirects)
+        content = content.replace(
+          /(<meta\s[^>]*content\s*=\s*"[^"]+)\.shtml(")/gi,
+          "$1.html$2",
+        );
+
         // Rewrite script/link references with hashed chunk filenames
         content = rewriteHashedPaths(content, shtmlPath, moduleMap, outName, destDir);
+
+        // Inject CSS <link> tags into <head>
+        const cssAssets = shtmlToCss.get(shtmlPath);
+        if (cssAssets && cssAssets.length > 0) {
+          const htmlOutDir = path.dirname(path.resolve(destDir, outName));
+          const links = cssAssets.map((cssFile) => {
+            const cssRel = path.relative(htmlOutDir, path.resolve(destDir, cssFile));
+            return `<link rel="stylesheet" href="${cssRel.replace(/\\/g, "/")}">`;
+          });
+          content = content.replace("</head>", `  ${links.join("\n  ")}\n</head>`);
+        }
 
         (bundle as Record<string, unknown>)[outName] = {
           type: "asset",
@@ -284,36 +339,39 @@ export default function vitePluginShtml(
       const p = processor!;
       const includeDirAbs = path.resolve(root, includeDir);
 
-      // Watch include file types for HMR
-      for (const ext of [".inc", ".tmpl", ".part"]) {
+      // Watch shtml and include file types for HMR
+      for (const ext of [".shtml", ".inc", ".tmpl", ".part"]) {
         server.watcher.add(path.resolve(includeDirAbs, `**/*${ext}`));
       }
 
-      server.watcher.on("change", (file) => {
-        const abs = path.resolve(root, file);
-        const dependents = p.incToShtml.get(abs);
-        if (dependents) {
-          for (const shtml of dependents) {
-            const url = "/" + path.relative(root, shtml).replace(/\\/g, "/");
-            server.ws.send({ type: "full-reload", path: url });
-          }
-        }
-      });
-
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ?? "/";
-        if (!url.endsWith(".shtml")) return next();
 
-        // Redirect / → /index.shtml
+        // Serve root / with index.shtml content (SSI-processed Vite-native HTML)
         if (url === "/") {
-          res.writeHead(302, { Location: "/index.shtml" });
-          res.end();
-          return;
+          const indexPath = path.resolve(includeDirAbs, "index.shtml");
+          if (fs.existsSync(indexPath)) {
+            try {
+              const rawHtml = fs.readFileSync(indexPath, "utf-8");
+              const transformUrl =
+                "/" + path.relative(root, indexPath).replace(/\\/g, "/");
+              const html = await server.transformIndexHtml(transformUrl, rawHtml);
+              res.setHeader("Content-Type", "text/html");
+              res.end(html);
+            } catch (err) {
+              console.error(`[vite-plugin-shtml] Error processing ${indexPath}:`, err);
+              res.statusCode = 500;
+              res.end(`SSI Error: ${err}`);
+            }
+            return;
+          }
+          return next();
         }
 
+        if (!url.endsWith(".shtml")) return next();
 
         const cleanUrl = url.split("?")[0].split("#")[0];
-        const filePath = path.resolve(root, cleanUrl.slice(1));
+        const filePath = path.resolve(includeDirAbs, cleanUrl.slice(1));
 
         if (!isPathSafe(filePath, includeDirAbs) || !fs.existsSync(filePath)) {
           return next();
@@ -343,5 +401,31 @@ export default function vitePluginShtml(
         }
       });
     },
+
+    // ─────────────────────────────────────────────────────────────
+    // HMR: handleHotUpdate — full-reload on .shtml / include changes
+    // ─────────────────────────────────────────────────────────────
+    handleHotUpdate(ctx) {
+      const p = processor!;
+      const abs = path.resolve(root, ctx.file);
+
+      // Include file changed → full-reload all dependent .shtml pages
+      const dependents = p.incToShtml.get(abs);
+      if (dependents) {
+        for (const shtml of dependents) {
+          const url = "/" + path.relative(root, shtml).replace(/\\/g, "/");
+          ctx.server.ws.send({ type: "full-reload", path: url });
+        }
+        return [];
+      }
+
+      // .shtml file itself changed → full-reload that page
+      if (ctx.file.endsWith(".shtml")) {
+        const url = "/" + path.relative(root, ctx.file).replace(/\\/g, "/");
+        ctx.server.ws.send({ type: "full-reload", path: url });
+        return [];
+      }
+    },
+
   };
 }
